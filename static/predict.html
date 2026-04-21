@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Man vs Machine - Predict Victory</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,wght@0,400;0,500;0,700;1,400&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    <div>FETCHING MATCH DATA...</div>
+  </div>
+
+  <div class="page">
+    <header class="header-bar">
+      <div class="logo">TENNIS<span>ANALYTICS</span></div>
+      <div class="nav-links">
+        <a href="index.html">Players</a>
+        <a href="tournaments.html">Tournaments</a>
+        <a href="predict.html" class="active">Man Vs Machine</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="title-area">
+        <h1>Man <em>vs</em> Machine</h1>
+        <p>Analyze the match stats below. Can you correctly guess the winner before the PyTorch Neural Network does? Your gameplay directly trains the model online.</p>
+      </div>
+
+      <div class="game-board" id="gameBoard">
+        <!-- Player 1 -->
+        <div class="player-card">
+          <div class="card-title">Player 1</div>
+          <div class="card-subtitle" id="p1-odds">Implied Win: --% | Rank Diff: --</div>
+          <div class="stat-list">
+            <div class="stat-item"><span class="stat-label">Aces</span><span class="stat-value" id="p1-ace">0</span></div>
+            <div class="stat-item"><span class="stat-label">Double Faults</span><span class="stat-value" id="p1-df">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Serves In</span><span class="stat-value" id="p1-1stin">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Serves Won</span><span class="stat-value" id="p1-1stwon">0</span></div>
+            <div class="stat-item"><span class="stat-label">BP Saved</span><span class="stat-value" id="p1-bpsaved">0</span></div>
+            <div class="stat-item"><span class="stat-label">BP Faced</span><span class="stat-value" id="p1-bpfaced">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Return Won</span><span class="stat-value" id="p1-1ret">0</span></div>
+          </div>
+          <button class="pick-btn" id="btn-pick-p1" onclick="makePick('Player 1')">I Pick Player 1</button>
+        </div>
+
+        <!-- Center Console -->
+        <div class="center-console">
+          <div class="vs-badge" id="vs-badge">VS</div>
+
+          <div class="status-panel" id="status-panel">
+            <div class="result-row">
+              <div class="result-label">The Actual Winner was</div>
+              <div class="result-value" id="actual-winner">Player X</div>
+            </div>
+
+            <div style="display:flex;gap:20px;justify-content:center;margin: 20px 0;">
+              <div>
+                <div class="result-label">Your Pick</div>
+                <div class="badge" id="user-badge">WAITING</div>
+              </div>
+              <div>
+                <div class="result-label">AI Pick (<span id="ai-conf">0%</span>)</div>
+                <div class="badge" id="ai-badge">WAITING</div>
+              </div>
+            </div>
+
+            <div class="nn-training">
+              <h4><div class="pulse"></div> Online Training Active</h4>
+              <div class="loss-ticker">
+                <span id="loss-start">0.000</span> <span class="loss-arrow">→</span> <span id="loss-end">0.000</span>
+              </div>
+            </div>
+
+            <button class="next-btn" onclick="fetchRandomMatch()">Load Next Match</button>
+          </div>
+        </div>
+
+        <!-- Player 2 -->
+        <div class="player-card">
+          <div class="card-title">Player 2</div>
+          <div class="card-subtitle" id="p2-odds">Implied Win: --% | Rank Diff: --</div>
+          <div class="stat-list">
+            <div class="stat-item"><span class="stat-label">Aces</span><span class="stat-value" id="p2-ace">0</span></div>
+            <div class="stat-item"><span class="stat-label">Double Faults</span><span class="stat-value" id="p2-df">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Serves In</span><span class="stat-value" id="p2-1stin">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Serves Won</span><span class="stat-value" id="p2-1stwon">0</span></div>
+            <div class="stat-item"><span class="stat-label">BP Saved</span><span class="stat-value" id="p2-bpsaved">0</span></div>
+            <div class="stat-item"><span class="stat-label">BP Faced</span><span class="stat-value" id="p2-bpfaced">0</span></div>
+            <div class="stat-item"><span class="stat-label">1st Return Won</span><span class="stat-value" id="p2-1ret">0</span></div>
+          </div>
+          <button class="pick-btn" id="btn-pick-p2" onclick="makePick('Player 2')">I Pick Player 2</button>
+        </div>
+
+      </div>
+    </main>
+    </div>
+
+  <script>
+    let currentMatchFeatures = null;
+    let actualWinnerStr = "";
+    
+    // UI Elements
+    const loader = document.getElementById('loader');
+    const statusPanel = document.getElementById('status-panel');
+    const vsBadge = document.getElementById('vs-badge');
+    const btnP1 = document.getElementById('btn-pick-p1');
+    const btnP2 = document.getElementById('btn-pick-p2');
+
+    async function fetchRandomMatch() {
+      loader.classList.add('active');
+      statusPanel.classList.remove('visible');
+      vsBadge.style.display = 'block';
+      btnP1.disabled = false;
+      btnP2.disabled = false;
+
+      try {
+        const res = await fetch('/random_match');
+        const data = await res.json();
+        
+        const f = data.features;
+        currentMatchFeatures = f;
+        actualWinnerStr = f.target === 1.0 ? "Player 1" : "Player 2";
+        
+        // Populate Setup
+        document.getElementById('p1-odds').innerText = `Implied Win: ${(f.p1_imp * 100).toFixed(1)}% | Rank Diff: ${f.rank_diff}`;
+        document.getElementById('p2-odds').innerText = `Implied Win: ${(f.p2_imp * 100).toFixed(1)}% | Rank Diff: ${-f.rank_diff}`;
+        
+        document.getElementById('p1-ace').innerText = f.p1_ace;
+        document.getElementById('p2-ace').innerText = f.p2_ace;
+        document.getElementById('p1-df').innerText = f.p1_df;
+        document.getElementById('p2-df').innerText = f.p2_df;
+        document.getElementById('p1-1stin').innerText = f.p1_1stin;
+        document.getElementById('p2-1stin').innerText = f.p2_1stin;
+        document.getElementById('p1-1stwon').innerText = f.p1_1stwon;
+        document.getElementById('p2-1stwon').innerText = f.p2_1stwon;
+        document.getElementById('p1-bpsaved').innerText = f.p1_bpsaved;
+        document.getElementById('p2-bpsaved').innerText = f.p2_bpsaved;
+        document.getElementById('p1-bpfaced').innerText = f.p1_bpfaced;
+        document.getElementById('p2-bpfaced').innerText = f.p2_bpfaced;
+        document.getElementById('p1-1ret').innerText = f.p1_1st_serve_return_won;
+        document.getElementById('p2-1ret').innerText = f.p2_1st_serve_return_won;
+
+        setTimeout(() => { loader.classList.remove('active'); }, 500);
+
+      } catch (e) {
+        alert("Failed to fetch match from database.");
+        loader.classList.remove('active');
+      }
+    }
+
+    async function makePick(userPick) {
+      if (!currentMatchFeatures) return;
+      
+      btnP1.disabled = true;
+      btnP2.disabled = true;
+
+      // Show processing visually
+      btnP1.innerText = "Training AI...";
+      btnP2.innerText = "Training AI...";
+
+      try {
+        const res = await fetch('/train_online', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentMatchFeatures)
+        });
+        const aiData = await res.json();
+
+        // Prepare UI data
+        const isUserCorrect = (userPick === actualWinnerStr);
+        const uBadge = document.getElementById('user-badge');
+        uBadge.innerText = isUserCorrect ? "CORRECT" : "INCORRECT";
+        uBadge.className = isUserCorrect ? "badge badge-win" : "badge badge-loss";
+
+        const aBadge = document.getElementById('ai-badge');
+        aBadge.innerText = aiData.is_correct ? "CORRECT" : "INCORRECT";
+        aBadge.className = aiData.is_correct ? "badge badge-win" : "badge badge-loss";
+
+        document.getElementById('ai-conf').innerText = Math.max(aiData.p1_prob, aiData.p2_prob).toFixed(2) * 100 + "%";
+        document.getElementById('actual-winner').innerText = actualWinnerStr;
+
+        // Loss animation fake ticker logic for gamification (since backwards pass returns final loss, we gamify a drop)
+        const lossVal = aiData.loss;
+        const fakeStartLoss = (lossVal + (Math.random() * 0.15 + 0.05)).toFixed(3);
+        const realEndLoss = lossVal.toFixed(3);
+        
+        document.getElementById('loss-start').innerText = fakeStartLoss;
+        document.getElementById('loss-end').innerText = fakeStartLoss;
+
+        vsBadge.style.display = 'none';
+        statusPanel.classList.add('visible');
+
+        btnP1.innerText = userPick === "Player 1" ? "YOUR PICK" : "I Pick Player 1";
+        btnP2.innerText = userPick === "Player 2" ? "YOUR PICK" : "I Pick Player 2";
+
+        // Animate loss
+        let currentDrop = parseFloat(fakeStartLoss);
+        const steps = 20;
+        const diff = (currentDrop - parseFloat(realEndLoss)) / steps;
+        let c = 0;
+        
+        const tick = setInterval(() => {
+          c++;
+          currentDrop -= diff;
+          document.getElementById('loss-end').innerText = currentDrop.toFixed(3);
+          if (c >= steps) {
+            clearInterval(tick);
+            document.getElementById('loss-end').innerText = realEndLoss;
+          }
+        }, 30);
+
+      } catch (e) {
+        alert("Training request failed.");
+        btnP1.innerText = "I Pick Player 1";
+        btnP2.innerText = "I Pick Player 2";
+        btnP1.disabled = false;
+        btnP2.disabled = false;
+      }
+    }
+
+    // Init
+    window.addEventListener('DOMContentLoaded', fetchRandomMatch);
+  </script>
+</body>
+</html>
