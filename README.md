@@ -44,7 +44,7 @@ This project provides:
 
 2. **Run the application**
    ```bash
-   python main.py
+   fastapi dev main.py
    ```
 
 3. **Access the application**
